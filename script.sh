@@ -41,6 +41,12 @@ for ((i=0; i<COUNT; i++)); do
 #        --Default  \
 #        --vga serial0
 
+qm set $VMID --ciuser Ubuntu
+qm set $VMID cipassword 123456
+qm set --ipconfig0 ip= "${BASE_IP}${IP_SUFFIX}",GW="10.24.7.1"
+QM SET $vmid --NAMESERVER $DNS
+
+
     # Start de VM automatisch
     qm start $VMID
 
