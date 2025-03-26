@@ -38,7 +38,7 @@ for ((i=0; i<COUNT; i++)); do
         --boot order=ide2 \
         --scsihw virtio-scsi-pci \
         --scsi0 ${STORAGE}:${DISK_SIZE} \
-        --serial0 socket \
+        --Default  \
         --vga serial0
 
     # Start de VM automatisch
