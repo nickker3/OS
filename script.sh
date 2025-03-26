@@ -1,26 +1,50 @@
 #!/bin/bash
 
-# Instellingen voor de VM
-VMID=101
-VMNAME="mijn-vm"
-ISO_PATH="local:iso/debian-12.iso"
-STORAGE="local-lvm"
-DISK_SIZE="10G"
-RAM="2048"     # in MB
-CORES="2"
+# === Instellingen ===
+ISO_PATH="local:iso/ubuntu-22.04.5-live-server-amd64.iso"  # Zorg dat dit bestand al is geüpload
+STORAGE="ceph-vm"
 NET_BRIDGE="vmbr0"
 
-# VM aanmaken
-qm create $VMID --name $VMNAME --memory $RAM --cores $CORES --net0 virtio,bridge=$NET_BRIDGE
+BASE_IP="10.24.7."
+START_IP_SUFFIX=100
+GATEWAY="10.24.7.1"
+DNS="8.8.8.8"
+SUBNET="255.255.255.0"
 
-# ISO koppelen en opstarten van cdrom
-qm set $VMID --ide2 $ISO_PATH,media=cdrom
-qm set $VMID --boot order=ide2
+RAM=2048
+CORES=1
+DISK_SIZE=15
+VMID_START=200
+NAME_PREFIX="TestServer"
 
-# Disk aanmaken en koppelen
-qm set $VMID --scsihw virtio-scsi-pci --scsi0 $STORAGE:$(echo $DISK_SIZE | sed 's/G//') # converteert 10G naar 10
+# === Input ===
+read -p "Hoeveel servers wil je aanmaken? " COUNT
 
-# Start de VM (optioneel)
-qm start $VMID
+# === Loop over aantal VMs ===
+for ((i=0; i<COUNT; i++)); do
+    VMID=$((VMID_START + i))
+    IP_SUFFIX=$((START_IP_SUFFIX + i))
+    IP="${BASE_IP}${IP_SUFFIX}"
+    VM_NAME="${NAME_PREFIX}-${i+1}"
 
-echo "VM $VMID ($VMNAME) is aangemaakt en gestart."
+    echo "🛠️  Maken van VM $VMID ($VM_NAME) met IP $IP..."
+
+    qm create $VMID \
+        --name $VM_NAME \
+        --memory $RAM \
+        --cores $CORES \
+        --net0 virtio,bridge=$NET_BRIDGE \
+        --ide2 $ISO_PATH,media=cdrom \
+        --boot order=ide2 \
+        --scsihw virtio-scsi-pci \
+        --scsi0 ${STORAGE}:${DISK_SIZE} \
+        --serial0 socket \
+        --vga serial0
+
+    # Start de VM automatisch
+    qm start $VMID
+
+    echo "✅ VM $VMID ($VM_NAME) is aangemaakt en gestart."
+done
+
+echo "🎉 Klaar! $COUNT VM(s) zijn succesvol aangemaakt en gestart."
