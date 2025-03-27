@@ -8,8 +8,8 @@ Het opzetten van een geautomatiseerde DevSecOps-bouwstraat met monitoring, bevei
 ## 📌 Onderdeel 1: Infrastructuur (Cloud opdracht)
 
 ### Taken:
-- Opzetten van een **Proxmox-cluster** met Ceph.
-- Inrichten van **monitoringtools** voor de cluster en de virtuele machines (bijv. met Prometheus, Grafana).
+- ✅Opzetten van een **Proxmox-cluster** met Ceph.
+- ✅Inrichten van **monitoringtools** voor de cluster en de virtuele machines (bijv. met Prometheus, Grafana).
 - Aanmaken van 2 omgevingen:
   - **LXC containers** voor klant 1 (WordPress voor trainingen, lage kosten).
   - **VM met HA** voor klant 2 (CRM/WordPress, hoge beveiliging en beschikbaarheid).
