@@ -24,6 +24,7 @@ CORES=1
 DISKSIZE=15
 USERNAME="vmuser"
 PASSWORD="changeme123"
+HA_GROUP="cluster"
 
 # ✅ Checks
 if [[ ! -f "$SSHKEY_PATH" ]]; then
@@ -98,7 +99,6 @@ for ((i=0; i<COUNT; i++)); do
 
   echo "🚧 VM $VMID ($VMNAME) wordt aangemaakt op $NODE met IP $IP..."
 
-  # ➕ 1. Genereer tijdelijk user-data bestand met fallback user
   USERDATA_FILE="/tmp/user-${VMID}.yml"
   cat <<EOF > "$USERDATA_FILE"
 #cloud-config
@@ -116,12 +116,12 @@ ssh_pwauth: true
 disable_root: false
 chpasswd:
   expire: false
+
 runcmd:
   - apt update
   - DEBIAN_FRONTEND=noninteractive apt upgrade -y
 EOF
 
-  # ➕ 2. Upload user-data file naar node
   scp "$USERDATA_FILE" "$NODE:/var/lib/vz/snippets/user-${VMID}.yml"
   rm "$USERDATA_FILE"
 
@@ -134,7 +134,13 @@ EOF
     qm set $VMID --boot order=scsi0 --vga std &&
     qm set $VMID --ipconfig0 ip=${IP}/${SUBNET_MASK},gw=${GATEWAY} --nameserver $DNS &&
     qm set $VMID --cicustom user=local:snippets/user-${VMID}.yml &&
-    qm start $VMID
+    qm start $VMID &&
+    sleep 3 &&
+    if ha-manager add vm:$VMID --group $HA_GROUP; then
+      echo '✅ HA toegevoegd voor VM $VMID' >> $LOG_FILE
+    else
+      echo '⚠️ HA toevoegen mislukt voor VM $VMID' >> $LOG_FILE
+    fi
   '"
 
   if ssh "$NODE" "qm status $VMID | grep -q running"; then
@@ -149,32 +155,3 @@ done
 echo "-------------------------------------------" >> "$LOG_FILE"
 echo "Einde log op $(date)" >> "$LOG_FILE"
 echo "✅ Logbestand opgeslagen: $LOG_FILE"
-
-echo "-------------------------------------------" | tee -a "$LOG_FILE"
-echo "📦 Ansible integratie gestart op $(date)" | tee -a "$LOG_FILE"
-
-# 🔧 Variabelen voor control node
-CONTROL_VM_USER="vmuser"
-CONTROL_VM_IP="10.24.7.40"
-PLAYBOOK_PATH="/home/ansibleadmin/ansible/playbooks/setup.yml"
-SSH_KEY="$HOME/.ssh/id_rsa"
-INVENTORY_FILE="inventory_auto.ini"
-
-echo "📄 Inventorybestand wordt aangemaakt..." | tee -a "$LOG_FILE"
-echo "[nieuw_vms]" > "$INVENTORY_FILE"
-for ((i=0; i<COUNT; i++)); do
-  IP_SUFFIX=$(echo $START_IP | awk -F. '{print $4}')
-  BASE_IP=$(echo $START_IP | awk -F. '{print $1"."$2"."$3"."}')
-  IP="${BASE_IP}$((IP_SUFFIX + i))"
-  echo "$IP" >> "$INVENTORY_FILE"
-done
-cat "$INVENTORY_FILE" >> "$LOG_FILE"
-
-echo "📤 Inventory wordt gekopieerd naar control VM ($CONTROL_VM_IP)..." | tee -a "$LOG_FILE"
-scp -i "$SSH_KEY" "$INVENTORY_FILE" "${CONTROL_VM_USER}@${CONTROL_VM_IP}:/home/${CONTROL_VM_USER}/inventory.ini" >> "$LOG_FILE" 2>&1
-
-echo "🎬 Ansible playbook wordt gestart op control VM..." | tee -a "$LOG_FILE"
-ssh -i "$SSH_KEY" "${CONTROL_VM_USER}@${CONTROL_VM_IP}" \
-  "ansible-playbook -i /home/${CONTROL_VM_USER}/inventory.ini ${PLAYBOOK_PATH} -u $USERNAME --private-key /home/${CONTROL_VM_USER}/.ssh/id_rsa" | tee -a "$LOG_FILE"
-
-echo "✅ Ansible integratie afgerond op $(date)" | tee -a "$LOG_FILE"
