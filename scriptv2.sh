@@ -135,12 +135,7 @@ EOF
     qm set $VMID --ipconfig0 ip=${IP}/${SUBNET_MASK},gw=${GATEWAY} --nameserver $DNS &&
     qm set $VMID --cicustom user=local:snippets/user-${VMID}.yml &&
     qm start $VMID &&
-    sleep 3 &&
-    if ha-manager add vm:$VMID --group $HA_GROUP; then
-      echo '✅ HA toegevoegd voor VM $VMID' >> $LOG_FILE
-    else
-      echo '⚠️ HA toevoegen mislukt voor VM $VMID' >> $LOG_FILE
-    fi
+    ha-manager add vm:$VMID --group $HA_GROUP || echo '⚠️ HA toevoegen mislukt voor VM $VMID'
   '"
 
   if ssh "$NODE" "qm status $VMID | grep -q running"; then
