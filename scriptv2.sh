@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 🖥️ Nodes voor verdeling (alleen prox00 en prox02)
+# 🖥️ Beschikbare nodes (alleen bestaande!)
 NODES=("prox00" "prox02")
 
 # 📥 Info opvragen
@@ -24,7 +24,7 @@ RAM=2048
 CORES=1
 DISKSIZE=15
 
-# ✅ Lokale checks
+# ✅ Checks
 if [[ -z "$SSHKEY_CONTENT" ]]; then
   echo "❌ SSH key niet gevonden of leeg: $HOME/.ssh/id_rsa.pub"
   exit 1
@@ -47,8 +47,24 @@ echo "-------------------------------------------" >> "$LOG_FILE"
 echo "Start log op $(date)" >> "$LOG_FILE"
 echo "-------------------------------------------" >> "$LOG_FILE"
 
-# 📤 Kopieer image naar nodes indien nodig
+# 🔎 Controleer SSH toegang tot nodes
+REACHABLE_NODES=()
 for NODE in "${NODES[@]}"; do
+  if ssh -o ConnectTimeout=5 $NODE "echo OK" &>/dev/null; then
+    echo "✅ Node bereikbaar via SSH: $NODE"
+    REACHABLE_NODES+=("$NODE")
+  else
+    echo "❌ Kan geen verbinding maken met node: $NODE"
+  fi
+done
+
+if [ ${#REACHABLE_NODES[@]} -eq 0 ]; then
+  echo "❌ Geen enkele node is bereikbaar. Stoppen."
+  exit 1
+fi
+
+# 📤 Kopieer image naar bereikbare nodes
+for NODE in "${REACHABLE_NODES[@]}"; do
   echo "🔍 Controleren of $IMAGE aanwezig is op $NODE..."
   if ! ssh $NODE "[ -f $REMOTE_IMAGE_PATH ]"; then
     echo "📦 Image wordt gekopieerd naar $NODE..."
@@ -58,7 +74,7 @@ for NODE in "${NODES[@]}"; do
   fi
 done
 
-# 🔁 Loop over het aantal VM's
+# 🔁 Loop over aantal VM's
 IP_SUFFIX=$(echo $START_IP | awk -F. '{print $4}')
 BASE_IP=$(echo $START_IP | awk -F. '{print $1"."$2"."$3"."}')
 
@@ -66,34 +82,31 @@ for ((i=0; i<COUNT; i++)); do
   VMID=$((VMID_START + i))
   IP="${BASE_IP}$((IP_SUFFIX + i))"
   VMNAME="${NAME_PREFIX}-$((i+1))"
-  NODE=${NODES[$((i % 2))]}
+  NODE=${REACHABLE_NODES[$((i % ${#REACHABLE_NODES[@]}))]}
 
   if [[ ! "$VMNAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
-    echo "❌ Ongeldige VM-naam: $VMNAME. Naam moet alleen letters, cijfers, - of _ bevatten."
+    echo "❌ Ongeldige VM-naam: $VMNAME. Alleen letters, cijfers, - of _ toegestaan."
     continue
   fi
 
   echo "🔍 Controleren of VMID $VMID al bestaat op $NODE..."
   if ssh $NODE "qm status $VMID" &>/dev/null; then
-    echo "⚠️  VMID $VMID bestaat al op $NODE. Deze wordt overgeslagen."
+    echo "⚠️  VMID $VMID bestaat al op $NODE. Wordt overgeslagen."
     continue
   fi
 
   echo "🚧 VM $VMID ($VMNAME) wordt aangemaakt op $NODE met IP $IP..."
 
-  SSH_COMMAND=$(cat <<EOF
-qm create $VMID --name $VMNAME --memory $RAM --cores $CORES --net0 virtio,bridge=$BRIDGE
-qm importdisk $VMID $REMOTE_IMAGE_PATH $STORAGE
-qm set $VMID --scsihw virtio-scsi-pci --scsi0 ${STORAGE}:vm-${VMID}-disk-0
-qm resize $VMID scsi0 ${DISKSIZE}G
-qm set $VMID --ide2 $CLOUDINIT_DISK
-qm set $VMID --boot order=scsi0 --vga std
-qm set $VMID --ciuser $USERNAME --cipassword changeme123 --sshkey "$SSHKEY_CONTENT" --ipconfig0 ip=${IP}/${SUBNET_MASK},gw=${GATEWAY} --nameserver $DNS
-qm start $VMID
-EOF
-  )
-
-  ssh "$NODE" "$SSH_COMMAND"
+  ssh "$NODE" bash -c "'
+    qm create $VMID --name $VMNAME --memory $RAM --cores $CORES --net0 virtio,bridge=$BRIDGE &&
+    qm importdisk $VMID $REMOTE_IMAGE_PATH $STORAGE &&
+    qm set $VMID --scsihw virtio-scsi-pci --scsi0 ${STORAGE}:vm-${VMID}-disk-0 &&
+    qm resize $VMID scsi0 ${DISKSIZE}G &&
+    qm set $VMID --ide2 $CLOUDINIT_DISK &&
+    qm set $VMID --boot order=scsi0 --vga std &&
+    qm set $VMID --ciuser $USERNAME --cipassword changeme123 --sshkey \"$SSHKEY_CONTENT\" --ipconfig0 ip=${IP}/${SUBNET_MASK},gw=${GATEWAY} --nameserver $DNS &&
+    qm start $VMID
+  '"
 
   if ssh "$NODE" "qm status $VMID | grep -q running"; then
     STATUS="✅ gestart"
