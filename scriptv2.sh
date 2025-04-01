@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 🖥️ Beschikbare nodes (alleen bestaande!)
+# 🖥️ Beschikbare nodes
 NODES=("prox00" "prox02")
 
 # 📥 Info opvragen
@@ -8,7 +8,6 @@ read -p "Hoeveel VM's wil je aanmaken? " COUNT
 read -p "Start VMID (bijv. 200): " VMID_START
 read -p "Naam prefix (bijv. TestServer): " NAME_PREFIX
 read -p "Start IP (bijv. 10.24.7.100): " START_IP
-read -p "Gebruikersnaam voor de VM's: " USERNAME
 
 # 🌍 Netwerk + opslag instellingen
 STORAGE="ceph-vm"
@@ -23,6 +22,8 @@ SSHKEY_PATH="$HOME/.ssh/id_rsa.pub"
 RAM=2048
 CORES=1
 DISKSIZE=15
+USERNAME="vmuser"
+PASSWORD="changeme123"
 
 # ✅ Checks
 if [[ ! -f "$SSHKEY_PATH" ]]; then
@@ -97,16 +98,16 @@ for ((i=0; i<COUNT; i++)); do
 
   echo "🚧 VM $VMID ($VMNAME) wordt aangemaakt op $NODE met IP $IP..."
 
-  # ➕ 1. Genereer tijdelijk user-data bestand met SSH + console login
+  # ➕ 1. Genereer tijdelijk user-data bestand met fallback user
   USERDATA_FILE="/tmp/user-${VMID}.yml"
   cat <<EOF > "$USERDATA_FILE"
 #cloud-config
 users:
   - name: $USERNAME
-    gecos: Geautomatiseerde gebruiker
+    gecos: Automatisch gegenereerde gebruiker
     sudo: ALL=(ALL) NOPASSWD:ALL
     shell: /bin/bash
-    plain_text_passwd: changeme123
+    plain_text_passwd: $PASSWORD
     lock_passwd: false
     ssh_authorized_keys:
       - $(cat "$SSHKEY_PATH")
@@ -139,7 +140,7 @@ EOF
     STATUS="❌ niet gestart"
   fi
 
-  echo "$VMNAME | VMID: $VMID | Node: $NODE | IP: $IP | OS: Ubuntu 22.04 | User: $USERNAME | Wachtwoord: changeme123 | Status: $STATUS" | tee -a "$LOG_FILE"
+  echo "$VMNAME | VMID: $VMID | Node: $NODE | IP: $IP | OS: Ubuntu 22.04 | User: $USERNAME | Wachtwoord: $PASSWORD | Status: $STATUS" | tee -a "$LOG_FILE"
 done
 
 echo "-------------------------------------------" >> "$LOG_FILE"
