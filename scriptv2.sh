@@ -38,7 +38,7 @@ fi
 
 # 🔁 Loop over aantal VM's
 IP_SUFFIX=$(echo $START_IP | awk -F. '{print $4}')
-BASE_IP=$(echo $START_IP | awk -F. '{print $1"."$2"."$3"."})'
+BASE_IP=$(echo $START_IP | awk -F. '{print $1"."$2"."$3"."}')
 
 for ((i=0; i<COUNT; i++)); do
   VMID=$((VMID_START + i))
