@@ -97,8 +97,29 @@ for ((i=0; i<COUNT; i++)); do
 
   echo "🚧 VM $VMID ($VMNAME) wordt aangemaakt op $NODE met IP $IP..."
 
-  TEMPKEY="/tmp/sshkey-${VMID}.pub"
-  scp "$SSHKEY_PATH" "$NODE:$TEMPKEY"
+  # ➕ 1. Genereer tijdelijk user-data bestand met SSH + console login
+  USERDATA_FILE="/tmp/user-${VMID}.yml"
+  cat <<EOF > "$USERDATA_FILE"
+#cloud-config
+users:
+  - name: $USERNAME
+    gecos: Geautomatiseerde gebruiker
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    plain_text_passwd: changeme123
+    lock_passwd: false
+    ssh_authorized_keys:
+      - $(cat "$SSHKEY_PATH")
+
+ssh_pwauth: true
+disable_root: false
+chpasswd:
+  expire: false
+EOF
+
+  # ➕ 2. Upload user-data file naar node
+  scp "$USERDATA_FILE" "$NODE:/var/lib/vz/snippets/user-${VMID}.yml"
+  rm "$USERDATA_FILE"
 
   ssh "$NODE" bash -c "'
     qm create $VMID --name $VMNAME --memory $RAM --cores $CORES --net0 virtio,bridge=$BRIDGE &&
@@ -107,9 +128,9 @@ for ((i=0; i<COUNT; i++)); do
     qm resize $VMID scsi0 ${DISKSIZE}G &&
     qm set $VMID --ide2 $CLOUDINIT_DISK &&
     qm set $VMID --boot order=scsi0 --vga std &&
-    qm set $VMID --ciuser $USERNAME --cipassword changeme123 --sshkey $TEMPKEY --ipconfig0 ip=${IP}/${SUBNET_MASK},gw=${GATEWAY} --nameserver $DNS &&
-    qm start $VMID &&
-    rm -f $TEMPKEY
+    qm set $VMID --ipconfig0 ip=${IP}/${SUBNET_MASK},gw=${GATEWAY} --nameserver $DNS &&
+    qm set $VMID --cicustom user=local:snippets/user-${VMID}.yml &&
+    qm start $VMID
   '"
 
   if ssh "$NODE" "qm status $VMID | grep -q running"; then
