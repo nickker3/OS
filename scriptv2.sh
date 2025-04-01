@@ -154,7 +154,7 @@ echo "-------------------------------------------" | tee -a "$LOG_FILE"
 echo "📦 Ansible integratie gestart op $(date)" | tee -a "$LOG_FILE"
 
 # 🔧 Variabelen voor control node
-CONTROL_VM_USER="ansibleadmin"
+CONTROL_VM_USER="vmuser"
 CONTROL_VM_IP="10.24.7.40"
 PLAYBOOK_PATH="/home/ansibleadmin/ansible/playbooks/setup.yml"
 SSH_KEY="$HOME/.ssh/id_rsa"
