@@ -37,8 +37,18 @@ if [[ ! -f $IMAGE ]]; then
   exit 1
 fi
 
+# 📁 Logbestand aanmaken
+LOG_DIR="logs"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/Log_$(date +'%Y-%m-%d_%H-%M-%S').log"
+
+echo "📝 Logging naar: $LOG_FILE"
+echo "-------------------------------------------" >> "$LOG_FILE"
+echo "Start log op $(date)" >> "$LOG_FILE"
+echo "-------------------------------------------" >> "$LOG_FILE"
+
 # 📤 Kopieer image naar nodes indien nodig
-for NODE in "${NODES[@]}"; do
+for NODE in "{{NODES[@]}}"; do
   echo "🔍 Controleren of $IMAGE aanwezig is op $NODE..."
   if ! ssh $NODE "[ -f $REMOTE_IMAGE_PATH ]"; then
     echo "📦 Image wordt gekopieerd naar $NODE..."
@@ -54,9 +64,9 @@ BASE_IP=$(echo $START_IP | awk -F. '{print $1"."$2"."$3"."}')
 
 for ((i=0; i<COUNT; i++)); do
   VMID=$((VMID_START + i))
-  IP="${BASE_IP}$((IP_SUFFIX + i))"
-  VMNAME="${NAME_PREFIX}-$((i+1))"
-  NODE=${NODES[$((i % 2))]}  # Om en om prox00 / prox02
+  IP="{BASE_IP}$((IP_SUFFIX + i))"
+  VMNAME="{NAME_PREFIX}-$((i+1))"
+  NODE={NODES[$((i % 2))]}
 
   echo "🔍 Controleren of VMID $VMID al bestaat op $NODE..."
   if ssh $NODE "qm status $VMID" &>/dev/null; then
@@ -66,28 +76,29 @@ for ((i=0; i<COUNT; i++)); do
 
   echo "🚧 VM $VMID ($VMNAME) wordt aangemaakt op $NODE met IP $IP..."
 
-  # Stel het volledige SSH-commando samen
   SSH_COMMAND=$(cat <<EOF
 qm create $VMID --name $VMNAME --memory $RAM --cores $CORES --net0 virtio,bridge=$BRIDGE
 qm importdisk $VMID $REMOTE_IMAGE_PATH $STORAGE
-qm set $VMID --scsihw virtio-scsi-pci --scsi0 ${STORAGE}:vm-${VMID}-disk-0
-qm resize $VMID scsi0 ${DISKSIZE}G
-qm set $VMID --ide2 $CLOUDINIT_DISK
+qm set $VMID --scsihw virtio-scsi-pci --scsi0 {STORAGE}:vm-${VMID}-disk-0
+qm resize $VMID scsi0 {DISKSIZE}G
+qm set $VMID --ide2 {CLOUDINIT_DISK}
 qm set $VMID --boot order=scsi0 --serial0 socket --vga serial0
-qm set $VMID --ciuser $USERNAME --cipassword changeme123 --sshkey "$(cat $SSHKEY)" --ipconfig0 ip=${IP}/${SUBNET_MASK},gw=${GATEWAY} --nameserver $DNS
+qm set $VMID --ciuser {USERNAME} --cipassword changeme123 --sshkey "$(cat {SSHKEY})" --ipconfig0 ip={IP}/{SUBNET_MASK},gw={GATEWAY} --nameserver {DNS}
 qm start $VMID
 EOF
   )
 
-  # Voer het commando uit op de juiste node
   ssh "$NODE" "$SSH_COMMAND"
 
-  # Controleer of de VM gestart is
   if ssh "$NODE" "qm status $VMID | grep -q running"; then
-    echo "✅ $VMNAME is succesvol aangemaakt en gestart op $NODE!"
+    STATUS="✅ gestart"
   else
-    echo "⚠️  $VMNAME is aangemaakt op $NODE, maar is NIET gestart!"
+    STATUS="❌ niet gestart"
   fi
+
+  echo "$VMNAME | VMID: $VMID | Node: $NODE | IP: $IP | OS: Ubuntu 22.04 | User: $USERNAME | Wachtwoord: changeme123 | Status: $STATUS" | tee -a "$LOG_FILE"
 done
 
-echo "🎉 Klaar! $COUNT VM(s) zijn succesvol verdeeld over prox00 en prox02."
+echo "-------------------------------------------" >> "$LOG_FILE"
+echo "Einde log op $(date)" >> "$LOG_FILE"
+echo "✅ Logbestand opgeslagen: $LOG_FILE"
