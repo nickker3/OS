@@ -119,6 +119,9 @@ chpasswd:
 runcmd:
   - apt update
   - DEBIAN_FRONTEND=noninteractive apt upgrade -y
+  - apt install -y software-properties-common
+  - add-apt-repository --yes --update ppa:ansible/ansible
+  - apt install -y ansible
 EOF
 
   # ➕ 2. Upload user-data file naar node
@@ -154,7 +157,7 @@ echo "-------------------------------------------" | tee -a "$LOG_FILE"
 echo "📦 Ansible integratie gestart op $(date)" | tee -a "$LOG_FILE"
 
 # 🔧 Variabelen voor control node
-CONTROL_VM_USER="ansibleadmin"
+CONTROL_VM_USER="vmuser"
 CONTROL_VM_IP="10.24.7.40"
 PLAYBOOK_PATH="/home/ansibleadmin/ansible/playbooks/setup.yml"
 SSH_KEY="$HOME/.ssh/id_rsa"
