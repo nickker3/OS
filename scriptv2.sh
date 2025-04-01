@@ -19,14 +19,14 @@ DNS="8.8.8.8"
 SUBNET_MASK="24"
 IMAGE="ubuntu-22.04-server-cloudimg-amd64.img"
 REMOTE_IMAGE_PATH="/root/$IMAGE"
-SSHKEY_CONTENT="$(cat $HOME/.ssh/id_rsa.pub)"
+SSHKEY_PATH="$HOME/.ssh/id_rsa.pub"
 RAM=2048
 CORES=1
 DISKSIZE=15
 
 # ✅ Checks
-if [[ -z "$SSHKEY_CONTENT" ]]; then
-  echo "❌ SSH key niet gevonden of leeg: $HOME/.ssh/id_rsa.pub"
+if [[ ! -f "$SSHKEY_PATH" ]]; then
+  echo "❌ SSH key niet gevonden op: $SSHKEY_PATH"
   exit 1
 fi
 
@@ -97,6 +97,9 @@ for ((i=0; i<COUNT; i++)); do
 
   echo "🚧 VM $VMID ($VMNAME) wordt aangemaakt op $NODE met IP $IP..."
 
+  TEMPKEY="/tmp/sshkey-${VMID}.pub"
+  scp "$SSHKEY_PATH" "$NODE:$TEMPKEY"
+
   ssh "$NODE" bash -c "'
     qm create $VMID --name $VMNAME --memory $RAM --cores $CORES --net0 virtio,bridge=$BRIDGE &&
     qm importdisk $VMID $REMOTE_IMAGE_PATH $STORAGE &&
@@ -104,8 +107,9 @@ for ((i=0; i<COUNT; i++)); do
     qm resize $VMID scsi0 ${DISKSIZE}G &&
     qm set $VMID --ide2 $CLOUDINIT_DISK &&
     qm set $VMID --boot order=scsi0 --vga std &&
-    qm set $VMID --ciuser $USERNAME --cipassword changeme123 --sshkey \"$SSHKEY_CONTENT\" --ipconfig0 ip=${IP}/${SUBNET_MASK},gw=${GATEWAY} --nameserver $DNS &&
-    qm start $VMID
+    qm set $VMID --ciuser $USERNAME --cipassword changeme123 --sshkey $TEMPKEY --ipconfig0 ip=${IP}/${SUBNET_MASK},gw=${GATEWAY} --nameserver $DNS &&
+    qm start $VMID &&
+    rm -f $TEMPKEY
   '"
 
   if ssh "$NODE" "qm status $VMID | grep -q running"; then
