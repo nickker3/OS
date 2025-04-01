@@ -19,14 +19,14 @@ DNS="8.8.8.8"
 SUBNET_MASK="24"
 IMAGE="ubuntu-22.04-server-cloudimg-amd64.img"
 REMOTE_IMAGE_PATH="/root/$IMAGE"
-SSHKEY="$HOME/.ssh/id_rsa.pub"
+SSHKEY_CONTENT="$(cat $HOME/.ssh/id_rsa.pub)"
 RAM=2048
 CORES=1
 DISKSIZE=15
 
 # ✅ Lokale checks
-if [[ ! -f $SSHKEY ]]; then
-  echo "❌ SSH key niet gevonden op $SSHKEY"
+if [[ -z "$SSHKEY_CONTENT" ]]; then
+  echo "❌ SSH key niet gevonden of leeg: $HOME/.ssh/id_rsa.pub"
   exit 1
 fi
 
@@ -68,7 +68,6 @@ for ((i=0; i<COUNT; i++)); do
   VMNAME="${NAME_PREFIX}-$((i+1))"
   NODE=${NODES[$((i % 2))]}
 
-  # Hostname check (letters, numbers, hyphens only)
   if [[ ! "$VMNAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
     echo "❌ Ongeldige VM-naam: $VMNAME. Naam moet alleen letters, cijfers, - of _ bevatten."
     continue
@@ -89,7 +88,7 @@ qm set $VMID --scsihw virtio-scsi-pci --scsi0 ${STORAGE}:vm-${VMID}-disk-0
 qm resize $VMID scsi0 ${DISKSIZE}G
 qm set $VMID --ide2 $CLOUDINIT_DISK
 qm set $VMID --boot order=scsi0 --vga std
-qm set $VMID --ciuser $USERNAME --cipassword changeme123 --sshkey "$(cat $SSHKEY)" --ipconfig0 ip=${IP}/${SUBNET_MASK},gw=${GATEWAY} --nameserver $DNS
+qm set $VMID --ciuser $USERNAME --cipassword changeme123 --sshkey "$SSHKEY_CONTENT" --ipconfig0 ip=${IP}/${SUBNET_MASK},gw=${GATEWAY} --nameserver $DNS
 qm start $VMID
 EOF
   )
