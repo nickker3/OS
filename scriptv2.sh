@@ -116,6 +116,9 @@ ssh_pwauth: true
 disable_root: false
 chpasswd:
   expire: false
+runcmd:
+  - apt update
+  - DEBIAN_FRONTEND=noninteractive apt upgrade -y
 EOF
 
   # ➕ 2. Upload user-data file naar node
