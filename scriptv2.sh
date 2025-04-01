@@ -89,14 +89,7 @@ qm set $VMID --scsihw virtio-scsi-pci --scsi0 ${STORAGE}:vm-${VMID}-disk-0
 qm resize $VMID scsi0 ${DISKSIZE}G
 qm set $VMID --ide2 $CLOUDINIT_DISK
 qm set $VMID --boot order=scsi0 --vga std
-qm set $VMID \
-  --ciuser $USERNAME \
-  --cipassword changeme123 \
-  --sshkey "$(cat $SSHKEY)" \
-  --ipconfig0 ip=${IP}/${SUBNET_MASK},gw=${GATEWAY} \
-  --nameserver $DNS \
-  --ssh-pwauth on
-
+qm set $VMID --ciuser $USERNAME --cipassword changeme123 --sshkey "$(cat $SSHKEY)" --ipconfig0 ip=${IP}/${SUBNET_MASK},gw=${GATEWAY} --nameserver $DNS
 qm start $VMID
 EOF
   )
