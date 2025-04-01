@@ -149,3 +149,32 @@ done
 echo "-------------------------------------------" >> "$LOG_FILE"
 echo "Einde log op $(date)" >> "$LOG_FILE"
 echo "✅ Logbestand opgeslagen: $LOG_FILE"
+
+echo "-------------------------------------------" | tee -a "$LOG_FILE"
+echo "📦 Ansible integratie gestart op $(date)" | tee -a "$LOG_FILE"
+
+# 🔧 Variabelen voor control node
+CONTROL_VM_USER="ansibleadmin"
+CONTROL_VM_IP="10.24.7.40"
+PLAYBOOK_PATH="/home/ansibleadmin/ansible/playbooks/setup.yml"
+SSH_KEY="$HOME/.ssh/id_rsa"
+INVENTORY_FILE="inventory_auto.ini"
+
+echo "📄 Inventorybestand wordt aangemaakt..." | tee -a "$LOG_FILE"
+echo "[nieuw_vms]" > "$INVENTORY_FILE"
+for ((i=0; i<COUNT; i++)); do
+  IP_SUFFIX=$(echo $START_IP | awk -F. '{print $4}')
+  BASE_IP=$(echo $START_IP | awk -F. '{print $1"."$2"."$3"."}')
+  IP="${BASE_IP}$((IP_SUFFIX + i))"
+  echo "$IP" >> "$INVENTORY_FILE"
+done
+cat "$INVENTORY_FILE" >> "$LOG_FILE"
+
+echo "📤 Inventory wordt gekopieerd naar control VM ($CONTROL_VM_IP)..." | tee -a "$LOG_FILE"
+scp -i "$SSH_KEY" "$INVENTORY_FILE" "${CONTROL_VM_USER}@${CONTROL_VM_IP}:/home/${CONTROL_VM_USER}/inventory.ini" >> "$LOG_FILE" 2>&1
+
+echo "🎬 Ansible playbook wordt gestart op control VM..." | tee -a "$LOG_FILE"
+ssh -i "$SSH_KEY" "${CONTROL_VM_USER}@${CONTROL_VM_IP}" \
+  "ansible-playbook -i /home/${CONTROL_VM_USER}/inventory.ini ${PLAYBOOK_PATH} -u $USERNAME --private-key /home/${CONTROL_VM_USER}/.ssh/id_rsa" | tee -a "$LOG_FILE"
+
+echo "✅ Ansible integratie afgerond op $(date)" | tee -a "$LOG_FILE"
