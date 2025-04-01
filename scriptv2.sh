@@ -48,7 +48,7 @@ echo "Start log op $(date)" >> "$LOG_FILE"
 echo "-------------------------------------------" >> "$LOG_FILE"
 
 # 📤 Kopieer image naar nodes indien nodig
-for NODE in "{{NODES[@]}}"; do
+for NODE in "${NODES[@]}"; do
   echo "🔍 Controleren of $IMAGE aanwezig is op $NODE..."
   if ! ssh $NODE "[ -f $REMOTE_IMAGE_PATH ]"; then
     echo "📦 Image wordt gekopieerd naar $NODE..."
@@ -64,9 +64,15 @@ BASE_IP=$(echo $START_IP | awk -F. '{print $1"."$2"."$3"."}')
 
 for ((i=0; i<COUNT; i++)); do
   VMID=$((VMID_START + i))
-  IP="{BASE_IP}$((IP_SUFFIX + i))"
-  VMNAME="{NAME_PREFIX}-$((i+1))"
-  NODE={NODES[$((i % 2))]}
+  IP="${BASE_IP}$((IP_SUFFIX + i))"
+  VMNAME="${NAME_PREFIX}-$((i+1))"
+  NODE=${NODES[$((i % 2))]}
+
+  # Hostname check (letters, numbers, hyphens only)
+  if [[ ! "$VMNAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+    echo "❌ Ongeldige VM-naam: $VMNAME. Naam moet alleen letters, cijfers, - of _ bevatten."
+    continue
+  fi
 
   echo "🔍 Controleren of VMID $VMID al bestaat op $NODE..."
   if ssh $NODE "qm status $VMID" &>/dev/null; then
@@ -79,11 +85,11 @@ for ((i=0; i<COUNT; i++)); do
   SSH_COMMAND=$(cat <<EOF
 qm create $VMID --name $VMNAME --memory $RAM --cores $CORES --net0 virtio,bridge=$BRIDGE
 qm importdisk $VMID $REMOTE_IMAGE_PATH $STORAGE
-qm set $VMID --scsihw virtio-scsi-pci --scsi0 {STORAGE}:vm-${VMID}-disk-0
-qm resize $VMID scsi0 {DISKSIZE}G
-qm set $VMID --ide2 {CLOUDINIT_DISK}
+qm set $VMID --scsihw virtio-scsi-pci --scsi0 ${STORAGE}:vm-${VMID}-disk-0
+qm resize $VMID scsi0 ${DISKSIZE}G
+qm set $VMID --ide2 $CLOUDINIT_DISK
 qm set $VMID --boot order=scsi0 --serial0 socket --vga serial0
-qm set $VMID --ciuser {USERNAME} --cipassword changeme123 --sshkey "$(cat {SSHKEY})" --ipconfig0 ip={IP}/{SUBNET_MASK},gw={GATEWAY} --nameserver {DNS}
+qm set $VMID --ciuser $USERNAME --cipassword changeme123 --sshkey "$(cat $SSHKEY)" --ipconfig0 ip=${IP}/${SUBNET_MASK},gw=${GATEWAY} --nameserver $DNS
 qm start $VMID
 EOF
   )
