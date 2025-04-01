@@ -37,7 +37,7 @@ if [[ ! -f $IMAGE ]]; then
   exit 1
 fi
 
-# 📤 Controleren en kopiëren van image naar nodes indien nodig
+# 📤 Kopieer image naar nodes indien nodig
 for NODE in "${NODES[@]}"; do
   echo "🔍 Controleren of $IMAGE aanwezig is op $NODE..."
   if ! ssh $NODE "[ -f $REMOTE_IMAGE_PATH ]"; then
@@ -48,7 +48,7 @@ for NODE in "${NODES[@]}"; do
   fi
 done
 
-# 🔁 Loop over aantal VM's
+# 🔁 Loop over het aantal VM's
 IP_SUFFIX=$(echo $START_IP | awk -F. '{print $4}')
 BASE_IP=$(echo $START_IP | awk -F. '{print $1"."$2"."$3"."}')
 
@@ -66,18 +66,28 @@ for ((i=0; i<COUNT; i++)); do
 
   echo "🚧 VM $VMID ($VMNAME) wordt aangemaakt op $NODE met IP $IP..."
 
-  ssh $NODE bash -c "'
-    qm create $VMID --name $VMNAME --memory $RAM --cores $CORES --net0 virtio,bridge=$BRIDGE &&
-    qm importdisk $VMID $REMOTE_IMAGE_PATH $STORAGE &&
-    qm set $VMID --scsihw virtio-scsi-pci --scsi0 ${STORAGE}:vm-${VMID}-disk-0 &&
-    qm resize $VMID scsi0 ${DISKSIZE}G &&
-    qm set $VMID --ide2 $CLOUDINIT_DISK &&
-    qm set $VMID --boot order=scsi0 --serial0 socket --vga serial0 &&
-    qm set $VMID --ciuser $USERNAME --cipassword changeme123 --sshkey \"$(cat $SSHKEY)\" --ipconfig0 ip=${IP}/${SUBNET_MASK},gw=${GATEWAY} --nameserver $DNS &&
-    qm start $VMID
-  '"
+  # Stel het volledige SSH-commando samen
+  SSH_COMMAND=$(cat <<EOF
+qm create $VMID --name $VMNAME --memory $RAM --cores $CORES --net0 virtio,bridge=$BRIDGE
+qm importdisk $VMID $REMOTE_IMAGE_PATH $STORAGE
+qm set $VMID --scsihw virtio-scsi-pci --scsi0 ${STORAGE}:vm-${VMID}-disk-0
+qm resize $VMID scsi0 ${DISKSIZE}G
+qm set $VMID --ide2 $CLOUDINIT_DISK
+qm set $VMID --boot order=scsi0 --serial0 socket --vga serial0
+qm set $VMID --ciuser $USERNAME --cipassword changeme123 --sshkey "$(cat $SSHKEY)" --ipconfig0 ip=${IP}/${SUBNET_MASK},gw=${GATEWAY} --nameserver $DNS
+qm start $VMID
+EOF
+  )
 
-  echo "✅ $VMNAME is succesvol aangemaakt en gestart op $NODE!"
+  # Voer het commando uit op de juiste node
+  ssh "$NODE" "$SSH_COMMAND"
+
+  # Controleer of de VM gestart is
+  if ssh "$NODE" "qm status $VMID | grep -q running"; then
+    echo "✅ $VMNAME is succesvol aangemaakt en gestart op $NODE!"
+  else
+    echo "⚠️  $VMNAME is aangemaakt op $NODE, maar is NIET gestart!"
+  fi
 done
 
 echo "🎉 Klaar! $COUNT VM(s) zijn succesvol verdeeld over prox00 en prox02."
