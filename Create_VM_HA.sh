@@ -119,8 +119,36 @@ chpasswd:
 
 runcmd:
   - apt update
-  - DEBIAN_FRONTEND=noninteractive apt upgrade -y
-EOF
+  - apt install -y apache2 mysql-server php php-mysql libapache2-mod-php php-cli php-curl php-gd php-mbstring php-xml php-xmlrpc wget unzip
+  - systemctl enable apache2
+  - systemctl start apache2
+  - systemctl start mysql
+  - mysql -e "CREATE DATABASE wordpress; CREATE USER 'wpuser'@'localhost' IDENTIFIED BY 'wordpressdb'; GRANT ALL PRIVILEGES ON wordpress.* TO 'wpuser'@'localhost'; FLUSH PRIVILEGES;"
+  - cd /var/www/html
+  - rm index.html || true
+  - wget https://wordpress.org/latest.zip
+  - unzip latest.zip
+  - mv wordpress/* .
+  - rmdir wordpress
+  - rm latest.zip
+  - chown -R www-data:www-data /var/www/html
+  - |
+    cat > /var/www/html/wp-config.php <<EOF
+    <?php
+    define( 'DB_NAME', 'wordpress' );
+    define( 'DB_USER', 'wpuser' );
+    define( 'DB_PASSWORD', 'wordpressdb' );
+    define( 'DB_HOST', 'localhost' );
+    define( 'DB_CHARSET', 'utf8' );
+    define( 'DB_COLLATE', '' );
+    \$table_prefix = 'wp_';
+    define( 'WP_DEBUG', false );
+    if ( ! defined( 'ABSPATH' ) ) {
+      define( 'ABSPATH', __DIR__ . '/' );
+    }
+    require_once ABSPATH . 'wp-settings.php';
+    EOF
+  - systemctl restart apache2
 
   scp "$USERDATA_FILE" "$NODE:/var/lib/vz/snippets/user-${VMID}.yml"
   rm "$USERDATA_FILE"
